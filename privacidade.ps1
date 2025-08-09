@@ -42,10 +42,9 @@ $telemetryDomains = @(
 
 Write-Host "Atualizando arquivo hosts..."
 
-# Ler conteúdo atual do hosts
-$hostsContent = Get-Content -Path $hostsPath -ErrorAction SilentlyContinue
+try {
+    $hostsContent = Get-Content -Path $hostsPath -ErrorAction Stop
 
-if ($hostsContent) {
     $updated = $false
     foreach ($domain in $telemetryDomains) {
         $pattern = "^0\.0\.0\.0\s+$domain$"
@@ -54,13 +53,14 @@ if ($hostsContent) {
             $updated = $true
         }
     }
+
     if ($updated) {
         Write-Host "Domínios adicionados no hosts."
     } else {
         Write-Host "Domínios de telemetria já bloqueados no hosts."
     }
-} else {
-    Write-Warning "Não foi possível ler o arquivo hosts. Execute o script como Administrador."
+} catch {
+    Write-Warning "Não foi possível ler ou alterar o arquivo hosts. Execute o script como Administrador."
 }
 
 # ----- Desativar Serviços de Telemetria -----
@@ -73,8 +73,8 @@ foreach ($svc in $services) {
         Set-Service -Name $svc -StartupType Disabled
         Write-Host "Serviço $svc desativado com sucesso." -ForegroundColor Green
     } catch {
-        $e = $_
-        Write-Warning ("Falha ao modificar serviço " + $svc + ": " + $e.Exception.Message)
+        $err = $_.Exception.Message
+        Write-Warning ("Falha ao modificar serviço " + $svc + ": " + $err)
     }
 }
 
@@ -83,37 +83,55 @@ try {
     Set-Service wuauserv -StartupType Manual
     Write-Host "Windows Update configurado para modo manual." -ForegroundColor Green
 } catch {
-    $e = $_
-    Write-Warning ("Falha ao configurar Windows Update: " + $e.Exception.Message)
+    $err = $_.Exception.Message
+    Write-Warning ("Falha ao configurar Windows Update: " + $err)
 }
 
 # ----- Remover Cortana -----
 Write-Host "Removendo Cortana..."
 try {
     Get-AppxPackage -AllUsers Microsoft.549981C3F5F10 | Remove-AppxPackage -ErrorAction Stop
-    Write-Host "Cortana removida com sucesso."
+    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ "Microsoft.549981C3F5F10" | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+    $check = Get-AppxPackage -AllUsers Microsoft.549981C3F5F10 -ErrorAction SilentlyContinue
+    if ($null -eq $check) {
+        Write-Host "Cortana removida com sucesso." -ForegroundColor Green
+    } else {
+        Write-Warning "Cortana NÃO foi removida."
+    }
 } catch {
-    $e = $_
-    Write-Warning ("Falha ao remover Cortana: " + $e.Exception.Message)
+    $err = $_.Exception.Message
+    Write-Warning ("Falha ao remover Cortana: " + $err)
 }
 
 # ----- Remover Microsoft Edge (Legacy) -----
 Write-Host "Removendo Microsoft Edge (legacy)..."
 try {
     Get-AppxPackage -AllUsers Microsoft.MicrosoftEdge | Remove-AppxPackage -ErrorAction Stop
-    Write-Host "Microsoft Edge (legacy) removido com sucesso."
+    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ "Microsoft.MicrosoftEdge" | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+    $checkEdge = Get-AppxPackage -AllUsers Microsoft.MicrosoftEdge -ErrorAction SilentlyContinue
+    if ($null -eq $checkEdge) {
+        Write-Host "Microsoft Edge (legacy) removido com sucesso." -ForegroundColor Green
+    } else {
+        Write-Warning "Microsoft Edge (legacy) NÃO foi removido."
+    }
 } catch {
-    Write-Warning "Setup do Edge não encontrado, ignorando remoção."
+    Write-Warning "Setup do Edge não encontrado ou erro ao remover, ignorando remoção."
 }
 
 # ----- Remover Xbox Game Bar -----
 Write-Host "Removendo Xbox Game Bar..."
 try {
     Get-AppxPackage -AllUsers Microsoft.XboxGamingOverlay | Remove-AppxPackage -ErrorAction Stop
-    Write-Host "Xbox Game Bar removida com sucesso."
+    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ "Microsoft.XboxGamingOverlay" | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
+    $checkXbox = Get-AppxPackage -AllUsers Microsoft.XboxGamingOverlay -ErrorAction SilentlyContinue
+    if ($null -eq $checkXbox) {
+        Write-Host "Xbox Game Bar removida com sucesso." -ForegroundColor Green
+    } else {
+        Write-Warning "Xbox Game Bar NÃO foi removida."
+    }
 } catch {
-    $e = $_
-    Write-Warning ("Falha ao remover Xbox Game Bar: " + $e.Exception.Message)
+    $err = $_.Exception.Message
+    Write-Warning ("Falha ao remover Xbox Game Bar: " + $err)
 }
 
 # ----- Remover outros apps pré-instalados -----
@@ -141,15 +159,27 @@ $apps = @(
 )
 
 foreach ($app in $apps) {
+    Write-Host "Removendo app $app..."
     try {
-        $pkg = Get-AppxPackage -AllUsers $app
-        if ($pkg) {
-            Remove-AppxPackage -Package $pkg.PackageFullName -AllUsers -ErrorAction Stop
-            Write-Host "App $app removido com sucesso."
+        # Remove o app para todos usuários
+        Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue | ForEach-Object {
+            Remove-AppxPackage -Package $_.PackageFullName -ErrorAction Stop
+        }
+        # Remove o provisionamento online para evitar reinstalação em novos usuários
+        Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ $app | ForEach-Object {
+            Remove-AppxProvisionedPackage -Online -PackageName $_.PackageName -ErrorAction Stop
+        }
+
+        # Verifica se o app foi removido
+        $checkApp = Get-AppxPackage -AllUsers -Name $app -ErrorAction SilentlyContinue
+        if ($null -eq $checkApp) {
+            Write-Host "App $app removido com sucesso." -ForegroundColor Green
+        } else {
+            Write-Warning "App $app NÃO foi removido."
         }
     } catch {
-        $e = $_
-        Write-Warning ("Falha ao remover app " + $app + ": " + $e.Exception.Message)
+        $err = $_.Exception.Message
+        Write-Warning ("Falha ao remover app " + $app + ": " + $err)
     }
 }
 
