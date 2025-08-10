@@ -118,22 +118,6 @@ try {
     Write-Warning "Setup do Edge não encontrado ou erro ao remover, ignorando remoção."
 }
 
-# ----- Remover Xbox Game Bar -----
-Write-Host "Removendo Xbox Game Bar..."
-try {
-    Get-AppxPackage -AllUsers Microsoft.XboxGamingOverlay | Remove-AppxPackage -ErrorAction Stop
-    Get-AppxProvisionedPackage -Online | Where-Object DisplayName -EQ "Microsoft.XboxGamingOverlay" | Remove-AppxProvisionedPackage -Online -ErrorAction Stop
-    $checkXbox = Get-AppxPackage -AllUsers Microsoft.XboxGamingOverlay -ErrorAction SilentlyContinue
-    if ($null -eq $checkXbox) {
-        Write-Host "Xbox Game Bar removida com sucesso." -ForegroundColor Green
-    } else {
-        Write-Warning "Xbox Game Bar NÃO foi removida."
-    }
-} catch {
-    $err = $_.Exception.Message
-    Write-Warning ("Falha ao remover Xbox Game Bar: " + $err)
-}
-
 # ----- Remover outros apps pré-instalados -----
 Write-Host "Removendo outros apps pré-instalados..."
 $apps = @(
@@ -150,12 +134,12 @@ $apps = @(
     "Microsoft.SkypeApp",
     "Microsoft.WindowsAlarms",
     "Microsoft.WindowsCalculator",
-    "Microsoft.WindowsCamera",
+    "Microsoft.WindowsCamera", # Caso pretenda usar camera comente essa linha
     "Microsoft.WindowsFeedbackHub",
     "Microsoft.WindowsMaps",
     "Microsoft.WindowsSoundRecorder",
     "Microsoft.ZuneMusic",
-    "Microsoft.ZuneVideo"
+    "Microsoft.ZuneVideo" # Caso se arrependa, você pode baixa-los a qualuqer momento namicrosoft store depois!
 )
 
 foreach ($app in $apps) {
